@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Build an offline media autosuggest catalog CSV from IMDb bulk datasets.
 
-Inputs (must be in the same directory as this script):
+Inputs (read from --dir):
 - title.basics.tsv.gz
 - title.ratings.tsv.gz
 
-Output:
+Output (written to --dir):
 - media_catalog.csv
 
 Usage:
-  python build_catalog.py
+  python 02_create_catalog.py --dir <folder>
 """
 
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 import gzip
 
@@ -27,12 +30,14 @@ def read_basics(basics_path: Path) -> pd.DataFrame:
         return pd.read_csv(
             f,
             sep="\t",
-            usecols=["tconst", "titleType", "primaryTitle", "startYear"],
+            usecols=["tconst", "titleType", "primaryTitle", "startYear", "runtimeMinutes", "genres"],
             dtype={
                 "tconst": "string",
                 "titleType": "string",
                 "primaryTitle": "string",
                 "startYear": "string",
+                "runtimeMinutes": "string",
+                "genres": "string",
             },
             na_values=["\\N"],
             keep_default_na=False,
@@ -57,11 +62,15 @@ def read_ratings(ratings_path: Path) -> pd.DataFrame:
 
 
 def main() -> None:
-    script_dir = Path(__file__).resolve().parent
+    p = argparse.ArgumentParser(description="Create media_catalog.csv from IMDb TSV datasets.")
+    p.add_argument("--dir", type=Path, required=True, help="Working folder (inputs and outputs)")
+    args = p.parse_args()
 
-    basics_path = script_dir / "title.basics.tsv.gz"
-    ratings_path = script_dir / "title.ratings.tsv.gz"
-    output_path = script_dir / "media_catalog.csv"
+    workdir = args.dir.resolve()
+
+    basics_path = workdir / "title.basics.tsv.gz"
+    ratings_path = workdir / "title.ratings.tsv.gz"
+    output_path = workdir / "media_catalog.csv"
 
     # Load input datasets.
     basics = read_basics(basics_path)
@@ -80,6 +89,15 @@ def main() -> None:
     basics = basics[basics["startYear"].notna()].copy()
     basics["startYear"] = basics["startYear"].astype(int)
 
+    # Parse runtime (minutes). Allow missing/invalid runtime.
+    basics["runtimeMinutes"] = pd.to_numeric(basics["runtimeMinutes"], errors="coerce").astype(
+        "Int64"
+    )
+
+    # Derive a single primary genre from the comma-separated genres list.
+    # Example: "Action,Drama" -> "Action". Missing genres remain missing.
+    basics["primary_genre"] = basics["genres"].astype("string").str.split(",").str[0]
+
     # Prepare ratings fields (allow missing Rating and Votes).
     ratings["averageRating"] = pd.to_numeric(ratings["averageRating"], errors="coerce")
     ratings["numVotes"] = pd.to_numeric(ratings["numVotes"], errors="coerce").astype("Int64")
@@ -96,8 +114,10 @@ def main() -> None:
             "titleType": "Type",
             "averageRating": "Rating",
             "numVotes": "Votes",
+            "primary_genre": "primary_genre",
+            "runtimeMinutes": "runtime",
         }
-    )[["Title", "Year", "IMDbID", "Type", "Rating", "Votes"]]
+    )[["Title", "Year", "IMDbID", "Type", "primary_genre", "runtime", "Rating", "Votes"]]
 
     # Sort by Votes (descending) then Rating (descending). Missing values sort last.
     out["_VotesSort"] = out["Votes"].fillna(0).astype(int)

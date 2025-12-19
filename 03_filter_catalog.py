@@ -15,14 +15,33 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description="Filter media catalog by minimum votes.")
     parser.add_argument("min_votes", type=int, help="Minimum number of votes to include")
+    parser.add_argument(
+        "--dir",
+        type=Path,
+        required=True,
+        help="Working folder containing media_catalog.csv (and where output is written)",
+    )
     args = parser.parse_args()
 
-    script_dir = Path(__file__).resolve().parent
-    input_path = script_dir / "media_catalog.csv"
-    output_path = script_dir / f"media_catalog_{args.min_votes}.csv"
+    workdir = args.dir.resolve()
+    input_path = workdir / "media_catalog.csv"
+    output_path = workdir / f"media_catalog_{args.min_votes}.csv"
 
-    # Load the catalog
-    df = pd.read_csv(input_path, dtype={"Votes": "Int64"})
+    # Load the catalog (keep stable dtypes for known columns; extra columns are preserved).
+    # Backwards compatible with older catalogs that don't include primary_genre/runtime.
+    header_cols = set(pd.read_csv(input_path, nrows=0).columns)
+    desired_dtypes = {
+        "Title": "string",
+        "Year": "Int64",
+        "IMDbID": "string",
+        "Type": "string",
+        "primary_genre": "string",
+        "runtime": "Int64",
+        "Rating": "float64",
+        "Votes": "Int64",
+    }
+    dtypes = {k: v for k, v in desired_dtypes.items() if k in header_cols}
+    df = pd.read_csv(input_path, dtype=dtypes)
 
     # Filter entries with more than min_votes
     filtered_df = df[df["Votes"] > args.min_votes]
