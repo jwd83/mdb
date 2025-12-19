@@ -11,7 +11,11 @@ This project provides scripts to download and process IMDb datasets to create an
 
 ## Usage
 Run a daily build (creates a new folder under `builds/` each run):
-1. `python main.py --out-root builds --min-votes 50000`
+1. `python main.py`
+
+Defaults:
+- `--out-root builds`
+- `--min-votes 250`
 
 Optionally create a trending report:
 2. `python optional_compare_catalogs.py <old.csv> <new.csv> --out report.html`

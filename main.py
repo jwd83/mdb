@@ -12,7 +12,7 @@ Outputs (in the created daily folder):
 - media_catalog.db (or --db-name)
 
 Usage:
-  python main.py --out-root <folder> [--min-votes 50000] [--db-name media_catalog.db]
+  python main.py [--out-root builds] [--min-votes 250] [--db-name media_catalog.db]
 
 Folder naming:
 - Default folder name is today in local time: YYYY-MM-DD
@@ -57,7 +57,12 @@ def _run(script_name: str, args: list[str]) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Run the full daily build pipeline.")
-    p.add_argument("--out-root", type=Path, required=True, help="Root folder to create daily build folders under")
+    p.add_argument(
+        "--out-root",
+        type=Path,
+        default=Path("builds"),
+        help="Root folder to create daily build folders under (default: builds)",
+    )
     p.add_argument(
         "--date",
         default=None,
@@ -66,8 +71,11 @@ def main() -> None:
     p.add_argument(
         "--min-votes",
         type=int,
-        default=None,
-        help="If set, also write a filtered media_catalog_<minVotes>.csv and build DB from it",
+        default=250,
+        help=(
+            "Minimum votes for filtered catalog/DB build (default: 250). "
+            "Set to 0 to effectively disable filtering."
+        ),
     )
     p.add_argument(
         "--db-name",
@@ -96,8 +104,8 @@ def main() -> None:
 
     # 03: optional filter
     csv_for_db = daily_dir / "media_catalog.csv"
-    if args.min_votes is not None:
-        mv = int(args.min_votes)
+    mv = int(args.min_votes)
+    if mv > 0:
         _run("03_filter_catalog.py", [str(mv), "--dir", str(daily_dir)])
         csv_for_db = daily_dir / f"media_catalog_{mv}.csv"
 
